@@ -111,8 +111,20 @@ final class WebViewController: UIViewController, WKUIDelegate, WKNavigationDeleg
 
     // MARK: scripts
     private func loadScript(_ name: String) -> String? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "js") else { return nil }
-        return try? String(contentsOf: url, encoding: .utf8)
+        guard let url = Bundle.main.url(forResource: name, withExtension: "js"),
+              var src = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        if name == "injector" {
+            // Small speed-ups applied when the script loads (Haunted Cavern keeps its original behaviour).
+            let edits: [(String, String)] = [
+                ("rebuildReverb() {", "rebuildReverb() { let cav=false; try{cav=!!cavActive();}catch(_e){} clearTimeout(this._rbT); if(cav){return this._rebuildReverbNow();} this._rbT=setTimeout(()=>{try{this._rebuildReverbNow();}catch(_e){}},160); },\n        _rebuildReverbNow() {"),
+                ("{ capture: true, once: false }", "{ capture: true, once: false, passive: true }"),
+                ("setInterval(() => VoiceCheck.sample(), 150);", "setInterval(() => VoiceCheck.sample(), 300);"),
+                ("box-shadow:0 8px 30px rgba(0,0,0,.6)", "box-shadow:0 2px 6px rgba(0,0,0,.5)"),
+                ("}, 250); win._tk = tk;", "}, 500); win._tk = tk;")
+            ]
+            for (a, b) in edits { src = src.replacingOccurrences(of: a, with: b) }
+        }
+        return src
     }
 
     private func installScripts() {
@@ -178,6 +190,7 @@ final class WebViewController: UIViewController, WKUIDelegate, WKNavigationDeleg
             self.installScripts()
             self.loadDiscord()
         })
+        a.addAction(UIAlertAction(title: "Lag report (6 sec test)", style: .default) { _ in self.lagTest() })
         a.addAction(UIAlertAction(title: "Reload", style: .default) { _ in self.loadDiscord() })
         a.addAction(UIAlertAction(title: on ? "Run WITHOUT ツcore" : "Run WITH ツcore", style: .default) { _ in
             self.injectEnabled = !on
@@ -194,6 +207,22 @@ final class WebViewController: UIViewController, WKUIDelegate, WKNavigationDeleg
         a.popoverPresentationController?.sourceView = gearButton
         a.popoverPresentationController?.sourceRect = gearButton.bounds
         present(a, animated: true)
+    }
+
+    // Measures how long the page stays busy (delay in ms) so we have numbers, not guesses.
+    private func lagTest() {
+        let probe = "(function(){if(window.__tsuLagOn)return;window.__tsuLagOn=1;var last=performance.now(),d=[];setInterval(function(){var n=performance.now();d.push(Math.max(0,n-last-50));last=n;if(d.length>140)d.shift();},50);var f=0,t0=performance.now(),fps=0;function r(){f++;var n=performance.now();if(n-t0>=1000){fps=Math.round(f*1000/(n-t0));f=0;t0=n;}requestAnimationFrame(r);}requestAnimationFrame(r);window.__tsuLag=function(){var s=d.slice().sort(function(a,b){return a-b;});var g=function(p){return s.length?Math.round(s[Math.min(s.length-1,Math.floor(s.length*p))]):0;};return 'fps '+fps+'  |  page delay: typical '+g(0.5)+' ms, bad '+g(0.95)+' ms, worst '+g(1)+' ms';};})();"
+        webView.evaluateJavaScript(probe, completionHandler: nil)
+        showStatus("Measuring… use the app normally for 6 seconds", autoHide: 6)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.5) { [weak self] in
+            guard let self = self else { return }
+            self.webView.evaluateJavaScript("window.__tsuLag && window.__tsuLag()") { res, _ in
+                let text = (res as? String) ?? "No data"
+                let a = UIAlertController(title: "Lag report", message: "ツcore \(self.injectEnabled ? "ON" : "OFF")  •  Smooth \(self.smoothMode ? "ON" : "OFF")\n" + text + "\n\nTypical under 20 ms and bad under 60 ms = smooth.", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+            }
+        }
     }
 
     private func zoomMenu() {
