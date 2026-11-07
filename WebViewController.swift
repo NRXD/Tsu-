@@ -56,6 +56,8 @@ final class WebViewController: UIViewController, WKUIDelegate, WKNavigationDeleg
         wv.backgroundColor = .black
         wv.scrollView.backgroundColor = .black
         wv.scrollView.contentInsetAdjustmentBehavior = .never
+        wv.scrollView.delaysContentTouches = false          // taps go through right away
+        wv.scrollView.panGestureRecognizer.delaysTouchesBegan = false
         wv.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(wv)
         let g = view.safeAreaLayoutGuide
@@ -124,6 +126,9 @@ final class WebViewController: UIViewController, WKUIDelegate, WKNavigationDeleg
         // screen size (viewport) control
         let vp = "(function(){window.__tsuW=\(viewWidth);function set(){try{var h=document.head||document.documentElement;if(!h)return;var m=document.querySelector('meta[name=viewport]');if(!m){m=document.createElement('meta');m.setAttribute('name','viewport');h.appendChild(m);}var c='width='+window.__tsuW+',minimum-scale=0.2,maximum-scale=5,user-scalable=yes';if(m.getAttribute('content')!==c)m.setAttribute('content',c);}catch(e){}}window.__tsuVP=function(x){window.__tsuW=x;set();};set();var n=0;var t=setInterval(function(){set();if(++n>25)clearInterval(t);},400);document.addEventListener('DOMContentLoaded',set);window.addEventListener('load',set);})();"
         ucc.addUserScript(WKUserScript(source: vp, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        // instant taps: stops the double-tap-to-zoom wait (pinch zoom still works)
+        let tapJS = "(function(){function a(){if(document.getElementById('tsu-tap'))return;var s=document.createElement('style');s.id='tsu-tap';s.textContent='html,body,*{touch-action:manipulation!important;-webkit-tap-highlight-color:transparent!important}';(document.head||document.documentElement).appendChild(s);}a();document.addEventListener('DOMContentLoaded',a);})();"
+        ucc.addUserScript(WKUserScript(source: tapJS, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         // smooth mode
         let css = "*,*::before,*::after{animation-duration:0.01ms!important;animation-delay:0s!important;transition-duration:0.01ms!important;transition-delay:0s!important;scroll-behavior:auto!important}*{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}"
         let sm: String
