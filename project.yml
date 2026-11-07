@@ -27,6 +27,7 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        CADisableMinimumFrameDurationOnPhone: true
         UIBackgroundModes:
           - audio
         NSMicrophoneUsageDescription: "ツcore needs the microphone to send your voice to Discord."
