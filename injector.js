@@ -453,7 +453,7 @@
     })();
     const _gestureEvents = ['click', 'keydown', 'mousedown', 'touchstart', 'pointerdown'];
     const _onGesture = () => { _doResume(); };
-    _gestureEvents.forEach(ev => document.addEventListener(ev, _onGesture, { capture: true, once: false }));
+    _gestureEvents.forEach(ev => document.addEventListener(ev, _onGesture, { capture: true, once: false, passive: true }));   // v3.20.10: passive = never delays a touch
 
     window.AudioContext = function(opts) {
         // Force interactive latency + 48kHz to match Discord's pipeline
@@ -1853,7 +1853,16 @@ registerProcessor('n7r-deess', N7rDeEss);
             // v3.18.1: LITE switched on (audio fell behind) while a long reverb is active -> rebuild it with the shorter tail
             try { if (cavActive()) { if (CAVN.tier != null && CAVN.tier > 3) CAVN.tier = 3; this.rebuildReverb(); } else if (PARAMS._eaxP && PARAMS.reverbDecay > 4.5) this.rebuildReverb(); } catch (_) {}
         },
+        // v3.20.10: the rebuild is heavy (builds 2 impulses, swaps convolver buffers). For every reverb EXCEPT Haunted Cavern it now waits
+        // until you stop moving a slider (160 ms) and runs once. Haunted Cavern keeps the original instant behaviour.
         rebuildReverb() {
+            // Haunted Cavern: EXACTLY the original behaviour (runs right away, untouched).
+            let cav = false; try { cav = !!cavActive(); } catch (_e) {}
+            clearTimeout(this._rbT);
+            if (cav) return this._rebuildReverbNow();
+            this._rbT = setTimeout(() => { try { this._rebuildReverbNow(); } catch (_e) {} }, 160);
+        },
+        _rebuildReverbNow() {
             if (!this.reverbConv) return;
             this.updateReverbMod();
             try { this.reverbConv.buffer = this._makeImpulse(window.DiscordContext, PARAMS.reverbDecay, PARAMS.megaReverb); } catch(_){}
@@ -2085,7 +2094,7 @@ registerProcessor('n7r-deess', N7rDeEss);
             } catch (_e) {}
         }
     };
-    setInterval(() => VoiceCheck.sample(), 150);
+    setInterval(() => VoiceCheck.sample(), 300);
     setInterval(() => { VoiceCheck.check(); }, 5000);
     try {   // network back / tab visible again / window focused -> check right away
         const quick = () => setTimeout(() => { VoiceCheck.backoff = 0; VoiceCheck.check(); }, 700);
@@ -3856,7 +3865,7 @@ input:checked+.n7r-tslide:before{transform:translateX(22px);}
             if (document.getElementById('n7r-skin-css')) return;
             const s = document.createElement('style'); s.id = 'n7r-skin-css';
             s.textContent = `
-.sk-win{position:fixed;z-index:1000000;display:none;background-repeat:no-repeat;background-color:#e8e8e8;user-select:none;-webkit-user-select:none;font:11px Tahoma,Verdana,sans-serif;color:#e8e8e8;box-shadow:0 8px 30px rgba(0,0,0,.6);touch-action:none;}
+.sk-win{position:fixed;z-index:1000000;display:none;background-repeat:no-repeat;background-color:#e8e8e8;user-select:none;-webkit-user-select:none;font:11px Tahoma,Verdana,sans-serif;color:#e8e8e8;box-shadow:0 2px 6px rgba(0,0,0,.5);touch-action:none;}
 .sk-win *{box-sizing:border-box;}
 .sk-a{position:absolute;}
 .sk-hot{position:absolute;cursor:pointer;}
@@ -4376,7 +4385,7 @@ input:checked+.n7r-tslide:before{transform:translateX(22px);}
             nbtn(win, 150, 232, 74, 24, '\u23E9 Fast', () => { setSpeed(1.5); win.refresh(); });
             nbtn(win, 232, 232, 74, 24, '\uD83D\uDC22 Slow', () => { setSpeed(0.75); win.refresh(); });
             nbtn(win, 314, 232, 74, 24, '\u25B6 Normal', () => { setSpeed(1); win.refresh(); });
-            const tk = setInterval(() => { if (win.el.style.display !== 'none') win.refresh(); }, 250); win._tk = tk;
+            const tk = setInterval(() => { if (win.el.style.display !== 'none') win.refresh(); }, 500); win._tk = tk;
             footer(win, [132, 165, 195, 228, 260], 'songs');
         });
 
